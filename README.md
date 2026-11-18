@@ -65,19 +65,19 @@ call when upgrading the client. A manual hold lasts until you change the mode.
 ## macOS menu bar app
 
 Build it with `./macos/build.sh` (Apple Silicon, Xcode command line tools) and copy
-`build/Hive Control.app` to `~/Applications/`. Open it and click its menu bar item. It has no Dock icon. The menu bar shows each heating zone's initial
-and measured temperature, for example `D: 19.5°  U: 18.2°`, coloured on a scale
-from blue (18 °C and below) through the normal text colour (20 °C) to orange
-(22 °C and above). An offline zone shows a dash; before the first successful read
-the item is a thermometer icon.
+`build/Hive Control.app` to `~/Applications/`. Open it and click its menu bar item.
+It has no Dock icon. The menu bar shows each heating zone's initial and measured
+temperature as two small rows, `D: 19.5°` over `U: 18.2°`, coloured on
+a scale from blue (18 °C and below) through the normal text colour (20 °C) to
+orange (22 °C and above). An offline zone shows a dash; before the first successful
+read the item is a thermometer icon.
 
-On a MacBook with a notch, macOS hides any menu bar item that would run under the
-notch, without warning. The app measures the room between the notch and its
-right-hand neighbour and uses the widest form that fits: the single line, then the
-same readings as two stacked rows, then the thermometer icon alone. It re-fits when
-the menu bar is rearranged or the display changes. Only one copy runs at a time: a
-newly opened copy quits any older one, so the build folder's app and the installed
-app cannot both take a menu bar slot. Each heating zone is one compact
+The two-row form is used on every display, so the item keeps one width and stays
+narrow enough to sit beside a MacBook notch in most menu bars. macOS hides any item
+that would run under the notch, without warning; if that happens, remove or reorder
+other menu bar icons. Only one copy runs at a time: a newly opened copy quits any
+older one, so the build folder's app and the installed app cannot both take a menu
+bar slot. Each heating zone is one compact
 card: the current temperature, a **− / +** stepper for a draft temperature, and a
 mode strip of **Schedule**, **Hold**, **Boost** (30 minutes, 1 hour or 2 hours) and
 **Off**, with the mode Hive reports highlighted. Changing the stepper alone sends no

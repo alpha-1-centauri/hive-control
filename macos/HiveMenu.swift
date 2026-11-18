@@ -699,29 +699,16 @@ enum Tray {
         }
     }
 
-    /// "D: 19.5°  U: 18.2°": each zone's initial and its measured temperature.
-    static func title(for zones: [Product]) -> NSAttributedString {
-        let size = NSFont.menuBarFont(ofSize: 0).pointSize
-        let label: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: size), .foregroundColor: NSColor.secondaryLabelColor]
-        let number = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium)
-        let title = NSMutableAttributedString()
-        for zone in zones {
-            if title.length > 0 { title.append(NSAttributedString(string: "  ", attributes: label)) }
-            title.append(NSAttributedString(string: "\(zone.title.prefix(1).uppercased()): ", attributes: label))
-            if zone.isOnline, let temperature = zone.temperature {
-                title.append(NSAttributedString(string: Format.reading(temperature), attributes: [
-                    .font: number, .foregroundColor: color(for: temperature)]))
-            } else {
-                title.append(NSAttributedString(string: "–", attributes: [
-                    .font: number, .foregroundColor: NSColor.tertiaryLabelColor]))
-            }
-        }
-        return title
+    /// "D: 19.5°  U: 18.2°": each zone's initial and its measured temperature, as
+    /// plain text for VoiceOver and for telling when the readings have changed.
+    static func summary(for zones: [Product]) -> String {
+        zones.map { zone in
+            "\(zone.title.prefix(1).uppercased()): \(Format.reading(zone.isOnline ? zone.temperature : nil))"
+        }.joined(separator: "  ")
     }
 
-    /// The same readings as two short rows per column, for when the single line
-    /// would not fit beside a MacBook notch. Colours resolve each time it is drawn.
+    /// Each zone's initial and temperature as two short rows per column: narrow
+    /// enough to sit beside a MacBook notch. Colours resolve each time it is drawn.
     static func stacked(for zones: [Product]) -> NSImage {
         let labelFont = NSFont.systemFont(ofSize: 10)
         let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
@@ -760,7 +747,7 @@ enum Tray {
     var statusItem: NSStatusItem!
     let popover = NSPopover()
     var timer: Timer?
-    private var trayState = ""
+    private var trayState: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -791,14 +778,6 @@ enum Tray {
             self.updateStatusItem()
         }
         updateStatusItem()
-        // Re-fit when the menu bar is rearranged or the display changes.
-        let refit: @Sendable (Notification) -> Void = { [weak self] _ in Task { @MainActor in self?.updateStatusItem() } }
-        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
-                                               object: nil, queue: .main, using: refit)
-        if let window = statusItem.button?.window {
-            NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification,
-                                                   object: window, queue: .main, using: refit)
-        }
         model.refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -809,53 +788,28 @@ enum Tray {
         }
     }
 
-    /// Length this item may have between the notch and its right-hand neighbour, or nil
-    /// on a display without a notch. Items are anchored on the right, so this does
-    /// not depend on how wide the item currently is.
-    private func roomBesideNotch() -> CGFloat? {
-        guard let window = statusItem.button?.window else { return nil }
-        let screen = window.screen ?? NSScreen.screens.first { $0.frame.intersects(window.frame) } ?? NSScreen.main
-        guard let area = screen?.auxiliaryTopRightArea else { return nil }
-        // macOS surrounds every item with spacing that is not part of its length.
-        let spacing = statusItem.length > 0 && window.frame.width > statusItem.length
-            ? window.frame.width - statusItem.length : 16
-        return window.frame.maxX - area.minX - spacing
-    }
-
-    /// Show the widest form that fits: one line of temperatures, then two stacked
-    /// rows, then just the thermometer. macOS silently hides an item that would
-    /// run under the notch, so it must never be wider than the room it has.
+    /// Always the two-row form once there are readings; a thermometer before the
+    /// first one. The form never depends on the room in the menu bar: choosing by
+    /// measured room made the item flip between forms while the screen was shared.
     func updateStatusItem() {
         guard let button = statusItem.button else { return }
         let zones = model.zones
-        let line = Tray.title(for: zones)
-        let lineWidth = ceil(line.size().width) + 4
-        let stacked = Tray.stacked(for: zones)
-        let stackedWidth = stacked.size.width + 4
-        let room = roomBesideNotch() ?? .infinity
-        let layout = zones.isEmpty || room < stackedWidth ? "icon" : room >= lineWidth ? "line" : "stacked"
-        let state = "\(layout)|\(line.string)"
-        guard state != trayState else { return }
-        trayState = state
-        switch layout {
-        case "line":
-            button.image = nil
-            button.attributedTitle = line
-            statusItem.length = lineWidth
-        case "stacked":
-            button.attributedTitle = NSAttributedString()
-            button.image = stacked
-            button.imagePosition = .imageOnly
-            statusItem.length = stackedWidth
-        default:
+        let summary = Tray.summary(for: zones)
+        guard summary != trayState else { return }
+        trayState = summary
+        button.attributedTitle = NSAttributedString()
+        button.imagePosition = .imageOnly
+        if zones.isEmpty {
             let icon = NSImage(systemSymbolName: "thermometer.medium", accessibilityDescription: "Hive Control")
             icon?.isTemplate = true
-            button.attributedTitle = NSAttributedString()
             button.image = icon
-            button.imagePosition = .imageOnly
             statusItem.length = NSStatusBar.system.thickness
+        } else {
+            let stacked = Tray.stacked(for: zones)
+            button.image = stacked
+            statusItem.length = stacked.size.width + 4
         }
-        button.setAccessibilityLabel(zones.isEmpty ? "Hive Control" : "Hive Control, \(line.string)")
+        button.setAccessibilityLabel(zones.isEmpty ? "Hive Control" : "Hive Control, \(summary)")
     }
 
     @objc func togglePopover() {
